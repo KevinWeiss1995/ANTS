@@ -1,4 +1,4 @@
-# ANTS 
+#  ANTS 
 ## Automated Network Threat Detection and Mitigation
 
 ## Overview  
