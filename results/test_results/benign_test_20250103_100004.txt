@@ -1,0 +1,19 @@
+Test run at: 2025-01-03 10:00:04
+
+Testing benign vector with features:
+Feature 1: 0.0
+Feature 2: 3000000.0
+Feature 3: 12.0
+Feature 4: 0.0
+Feature 5: 0.0
+Feature 6: 4.0
+Feature 7: 4.0
+
+Testing API endpoint with benign vector...
+API Prediction Response: {'prediction': 1}
+
+Testing model directly...
+Model prediction: BENIGN
+Prediction probabilities: [0.02244872 0.97755128]
+
+Test results saved to: /Users/kweiss/git/ANTS/results/test_results/benign_test_20250103_100004.txt
