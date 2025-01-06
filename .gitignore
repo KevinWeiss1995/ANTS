@@ -1,0 +1,71 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.pkl
+*.egg
+*.egg-info
+dist/
+build/
+*.so
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Flask instance folder
+instance/
+
+# pyenv
+.python-version
+
+# pytest
+.cache/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# coverage reports
+.coverage
+.coverage.*
+
+# tox
+.tox/
+.nox/
+*.nox
+*.coverage
+*.coverage.*
+
+# environment variables
+.env
+.env.*
+
+# ipython
+profile_default/
+ipython_config.py
+
+# Python logs
+*.log
+
+# Ignore datasets
+preprocessing/DDoS/CSVs/
+preprocessing/DDoS/attacks/
+data/
+
+# Ignore trained model
+trained_models/
