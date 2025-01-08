@@ -6,9 +6,9 @@
 
 ## Models
 
-DDoS: Random Forest Classifier
+DDoS: Random Forest Classifier - Random Forest can handle high dimensional data and is resilient to noise and overfitting, making it ideal for detecting DDoS attacks. They are also robust against imbalanced datasets, which in our case is essential. 
 
-Malware: Graph Neural Network
+Malware: Graph Neural Network - Through graph representation of data we can model the complex relationships and interactions malware often exhibits (file relationships, network traffic, etc). GNNs can aggregate information from neighboring nodes, allowing them to learn both local and global features of the graph. They are also capable of handling irregular data structures that traditional machine learning models struggle with. 
 
 ## Preprocessing
 Run in this order:
