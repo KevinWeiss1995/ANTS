@@ -10,14 +10,20 @@ DDoS: Random Forest Classifier - Random Forest can handle high dimensional data 
 
 Malware: Graph Neural Network - Through graph representation of data we can model the complex relationships and interactions malware often exhibits (file relationships, network traffic, etc). GNNs can aggregate information from neighboring nodes, allowing them to learn both local and global features of the graph. They are also capable of handling irregular data structures that traditional machine learning models struggle with. 
 
+Phising: ? 
+
 ## Preprocessing
-Run in this order:
+For DDoS, run in this order:
 
 1) preprocess.py
 2) filter_attacks.py
 3) feature_select_attack.py
 4) feature_select_all.py
 
+For malware:
+
+1) preprocess.py
+2) gnn_preprocess.py
 
 ## Features  
 - **Multi-Model Threat Detection**: Implements a variety of machine learning models for detecting diverse threat vectors, including:
