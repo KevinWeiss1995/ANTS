@@ -25,7 +25,7 @@ For malware:
 1) preprocess.py
 2) gnn_preprocess.py
 
-## Features  
+## (Future) Features 
 - **Multi-Model Threat Detection**: Implements a variety of machine learning models for detecting diverse threat vectors, including:
   - Distributed Denial-of-Service (DDoS) attacks.
   - Port scans.
