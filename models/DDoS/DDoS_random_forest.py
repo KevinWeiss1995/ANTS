@@ -14,6 +14,40 @@ from imblearn.under_sampling import RandomUnderSampler
 from imblearn.pipeline import Pipeline
 from sklearn.metrics import confusion_matrix, classification_report
 
+
+"""
+This module provides functionality to train and evaluate a Random Forest classifier for detecting DDoS attacks 
+using network flow features. The script includes preprocessing, feature scaling, class balancing, model training, 
+evaluation, and result saving.
+
+Key Functions:
+- `train_ddos_model`: Trains a Random Forest classifier on labeled network traffic data, evaluates its performance, 
+  and saves the trained model and scaler to disk.
+- Main Section: Loads the dataset, preprocesses labels, analyzes data samples, and initiates the training process.
+
+Usage:
+1. Update the `DATA_PATH` variable to point to the dataset file.
+2. Ensure the `algorithms_features` dictionary contains the desired feature columns for training.
+3. Run the script to train the model and save the results.
+
+Features:
+- Handles imbalanced datasets using RandomUnderSampler.
+- Stratified train-test splitting for balanced evaluation.
+- Detailed model performance metrics (accuracy, precision, recall, F1-score).
+- Saves the trained model, scaler, and performance metrics to specified locations.
+
+Dependencies:
+- NumPy
+- Pandas
+- scikit-learn
+- imbalanced-learn
+- pickle
+- csv
+- os
+"""
+
+
+
 def train_ddos_model(df, y, algorithms_features, result_path=None):
     # If no result_path provided, use the default path
     if result_path is None:
