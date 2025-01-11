@@ -46,8 +46,10 @@ The system is trained and tested using a variety of real-world and synthetic dat
 Data obtained from 
 
 DDos: https://www.unb.ca/cic/datasets/
+
 Malware: https://github.com/imfaisalmalik/CTU13-CSV-Dataset
-Phishing: https://www.crummy.com/software/BeautifulSoup/bs4/doc/
+
+Phishing: https://archive.ics.uci.edu/dataset/327/phishing+websites
 
 In base directory, create data/malware and data/DDoS and save the respective data there.
 
