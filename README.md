@@ -43,8 +43,11 @@ The system is trained and tested using a variety of real-world and synthetic dat
 - System telemetry and endpoint data  
 - Threat intelligence feeds
 
-Data obtained from https://www.unb.ca/cic/datasets/
-https://github.com/imfaisalmalik/CTU13-CSV-Dataset
+Data obtained from 
+
+DDos: https://www.unb.ca/cic/datasets/
+Malware: https://github.com/imfaisalmalik/CTU13-CSV-Dataset
+Phishing: https://www.crummy.com/software/BeautifulSoup/bs4/doc/
 
 In base directory, create data/malware and data/DDoS and save the respective data there.
 
