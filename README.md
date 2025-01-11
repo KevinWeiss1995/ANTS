@@ -1,6 +1,3 @@
-## THIS IS PUSH TEST
-
-
 #  ANTS 
 ## Automated Network Threat Detection and Mitigation
 
