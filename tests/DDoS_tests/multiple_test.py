@@ -5,7 +5,6 @@ import os
 import numpy as np
 import datetime
 
-# Get the path to the saved model
 base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 model_path = os.path.join(base_path, "results", "models", "DDoS_RandomForest.pkl")
 scaler_path = os.path.join(base_path, "results", "models", "DDoS_RandomForest_scaler.pkl")
