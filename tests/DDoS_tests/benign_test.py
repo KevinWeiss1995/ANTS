@@ -9,7 +9,7 @@ base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 model_path = os.path.join(base_path, "results", "models", "DDoS_RandomForest.pkl")
 scaler_path = os.path.join(base_path, "results", "models", "DDoS_RandomForest_scaler.pkl")
 
-api_url = "http://127.0.0.1:5001/predict"  
+api_url = "http://127.0.0.1:5001/predict/DDoS"  
 
 # Updated benign features to match real benign patterns
 benign_data = {
