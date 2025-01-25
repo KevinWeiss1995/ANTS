@@ -23,9 +23,8 @@ repo_root = get_git_repo_root()
 xgboost_model_path = os.path.join(repo_root, 'results', 'models', 'phishing_xgboost.pkl')
 random_forest_model_path = os.path.join(repo_root, 'results', 'models', 'DDoS_RandomForest.pkl')
 rf_scaler_path = os.path.join(repo_root, 'results', 'models', 'DDoS_RandomForest_scaler.pkl')
-phishing_scaler_path = os.path.join(repo_root, 'results', 'models', 'phish_scalar.pkl')  # Path for phishing scaler
+phishing_scaler_path = os.path.join(repo_root, 'results', 'models', 'phish_scalar.pkl') 
 
-# Load the XGBoost model
 try:
     with open(xgboost_model_path, 'rb') as model_file:
         phish_model = pickle.load(model_file)  # Changed variable name to phish_model
