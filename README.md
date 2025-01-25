@@ -10,7 +10,7 @@ DDoS: Random Forest Classifier - Random Forest can handle high dimensional data 
 
 Malware: Graph Neural Network - Through graph representation of data we can model the complex relationships and interactions malware often exhibits (file relationships, network traffic, etc). GNNs can aggregate information from neighboring nodes, allowing them to learn both local and global features of the graph. They are also capable of handling irregular data structures that traditional machine learning models struggle with. 
 
-Phising: ? (Python Libraries: Libraries like BeautifulSoup for parsing HTML, requests for fetching URLs, and email for handling email data can be useful for feature extraction)
+Phising: XGBoost
 
 ## Preprocessing
 For DDoS, run in this order:
