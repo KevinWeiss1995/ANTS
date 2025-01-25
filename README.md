@@ -57,6 +57,7 @@ In base directory, create data/malware and data/DDoS and save the respective dat
 
 ```bash
 pip3 install -r requirements.txt
+```
 
 
 
