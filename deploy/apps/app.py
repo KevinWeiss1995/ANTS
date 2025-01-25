@@ -27,18 +27,18 @@ scaler_path = os.path.join(repo_root, 'results', 'models', 'DDoS_RandomForest_sc
 # Load the XGBoost model
 try:
     with open(xgboost_model_path, 'rb') as model_file:
-        xgb_model = pickle.load(model_file)
+        phish_model = pickle.load(model_file)
 except FileNotFoundError:
     print(f"Error: XGBoost model file not found at {xgboost_model_path}")
-    xgb_model = None
+    phish_model = None
 
 # Load the DDoS Random Forest model
 try:
     with open(random_forest_model_path, 'rb') as model_file:
-        rf_model = pickle.load(model_file)
+        DDoS_model = pickle.load(model_file)
 except FileNotFoundError:
     print(f"Error: DDoS Random Forest model file not found at {random_forest_model_path}")
-    rf_model = None
+    DDoS_model = None
 
 # Load the scaler used during training for DDoS Random Forest
 try:
@@ -50,20 +50,20 @@ except FileNotFoundError:
 
 @app.route('/predict/phishing', methods=['POST'])
 def predict_xgboost():
-    if xgb_model is None:
+    if phish_model is None:
         return jsonify({"error": "Phishing model not loaded"}), 500
 
     input_data = request.json
     input_df = pd.DataFrame(input_data)
 
     # Make predictions using the XGBoost model
-    predictions = xgb_model.predict(input_df)
+    predictions = phish_model.predict(input_df)
 
     return jsonify({'predictions': predictions.tolist()})
 
 @app.route('/predict/DDoS', methods=['POST'])
 def predict_random_forest():
-    if rf_model is None:
+    if DDoS_model is None:
         return jsonify({"error": "DDoS model not loaded"}), 500
 
     input_data = request.json
@@ -76,7 +76,7 @@ def predict_random_forest():
         return jsonify({"error": "Scaler not loaded"}), 500
 
     # Make predictions using the Random Forest model
-    predictions = rf_model.predict(scaled_data)
+    predictions = DDoS_model.predict(scaled_data)
 
     return jsonify({'predictions': predictions.tolist()})
 
