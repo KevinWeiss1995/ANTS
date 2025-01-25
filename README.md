@@ -63,7 +63,6 @@ pip3 install -r requirements.txt
 
 ## ToDo
 
-* Work on enviornment, Pixi or conda?
 * Train GNN with GPU once resources arrive 
 * Set up WSGI
 * Data pipeline
