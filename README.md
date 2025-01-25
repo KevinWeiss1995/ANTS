@@ -59,3 +59,13 @@ In base directory, create data/malware and data/DDoS and save the respective dat
 pip3 install -r requirements.txt
 
 
+
+## ToDo
+
+* Work on enviornment, Pixi or conda?
+* Train GNN with GPU once resources arrive 
+* Set up WSGI
+* Data pipeline
+* Deploy again botnet 
+
+
