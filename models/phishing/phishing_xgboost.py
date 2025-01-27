@@ -1,71 +1,144 @@
+import numpy as np
 import pandas as pd
-from scipy.io import arff
-from sklearn.model_selection import train_test_split, GridSearchCV
+from scipy.io.arff import loadarff
+from sklearn.model_selection import train_test_split, RandomizedSearchCV
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler
-import xgboost as xgb
-import pickle  
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix 
+from sklearn.metrics import accuracy_score, classification_report
+from xgboost import XGBClassifier
+import joblib
 
-importance_df = pd.read_csv('/Users/kweiss/git/cyber/ANTS/data/phishing/feature_importance_phishing.csv') 
+# Load the .arff file
+def load_data(file_path):
+    data = loadarff(file_path)
+    df = pd.DataFrame(data[0])
+    # Convert bytes to strings for categorical columns
+    for col in df.columns:
+        if df[col].dtype == object:
+            df[col] = df[col].str.decode('utf-8')
+    # Convert all columns to numeric
+    df = df.apply(pd.to_numeric)
+    return df
 
-threshold = importance_df['Importance'].quantile(0.75)  
-selected_features = importance_df[importance_df['Importance'] >= threshold]['Feature'].tolist()
+# Filter and rename features based on importance
+def filter_and_rename_features(df, top_features):
+    # Filter the dataset to include only the top 10 most important features
+    df_filtered = df[top_features + ['Result']]  # Include the target column
+    
+    # Rename the features to ensure uniqueness
+    # Instead of removing suffixes, we keep them to avoid duplicates
+    feature_mapping = {feature: feature for feature in top_features}
+    df_filtered = df_filtered.rename(columns=feature_mapping)
+    
+    return df_filtered
 
-data = arff.loadarff('/Users/kweiss/git/cyber/ANTS/data/phishing/phishing_data.arff') 
-df = pd.DataFrame(data[0]) 
+# Preprocessing pipeline
+def create_preprocessing_pipeline(features):
+    # Define numerical features (all features are numerical in this dataset)
+    numerical_features = features
+    
+    # Preprocessing for numerical features
+    numerical_transformer = Pipeline(steps=[
+        ('scaler', StandardScaler())  # Scale numerical features
+    ])
 
-df = df.applymap(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
-df.dropna(inplace=True)
-df = pd.get_dummies(df, drop_first=True)
-df.columns = df.columns.str.strip()
+    # Combine preprocessing steps
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', numerical_transformer, numerical_features)
+        ]
+    )
+    return preprocessor
 
-print("Available columns:", df.columns.tolist())  
+# Model training with hyperparameter tuning
+def train_model(X_train, y_train, features):
+    # Define the model
+    model = XGBClassifier(random_state=42, use_label_encoder=False, eval_metric='logloss')
 
-target_variable = 'Result_1'  
-if target_variable not in df.columns:
-    raise KeyError(f"The '{target_variable}' column is not found in the DataFrame. Available columns: {df.columns.tolist()}")
+    # Hyperparameter grid for tuning
+    param_grid = {
+        'model__n_estimators': [100, 200, 300],
+        'model__max_depth': [3, 5, 7],
+        'model__learning_rate': [0.01, 0.1, 0.2],
+        'model__subsample': [0.8, 0.9, 1.0],
+        'model__colsample_bytree': [0.8, 0.9, 1.0]
+    }
 
-X = df[selected_features] 
-y = df[target_variable]
+    # Create the full pipeline
+    preprocessor = create_preprocessing_pipeline(features)
+    pipeline = Pipeline(steps=[
+        ('preprocessor', preprocessor),
+        ('model', model)
+    ])
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Randomized search for hyperparameter tuning
+    search = RandomizedSearchCV(
+        pipeline,
+        param_grid,
+        n_iter=10,  # Number of parameter settings to sample
+        cv=5,       # 5-fold cross-validation
+        scoring='accuracy',
+        random_state=42,
+        n_jobs=-1   # Use all available cores
+    )
 
-scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)
-X_test = scaler.transform(X_test)
+    # Fit the model
+    search.fit(X_train, y_train)
+    return search
 
-xgb_model = xgb.XGBClassifier(objective='binary:logistic', eval_metric='logloss')
+# Save the model as a pickle file
+def save_model(model, file_path):
+    joblib.dump(model, file_path)
 
-param_grid = {
-    'max_depth': [3, 5, 7],
-    'learning_rate': [0.01, 0.1, 0.2],
-    'n_estimators': [100, 200],
-    'subsample': [0.8, 1.0],
-    'colsample_bytree': [0.8, 1.0]
-}
+# Main function
+def main():
+    # Load data
+    file_path = '/Users/kweiss/git/cyber/ANTS/data/phishing/phishing_data.arff'
+    df = load_data(file_path)
 
-grid_search = GridSearchCV(estimator=xgb_model, param_grid=param_grid, scoring='accuracy', cv=3, verbose=1)
+    # Check for duplicate column names
+    duplicates = df.columns[df.columns.duplicated()].unique()
+    print("Duplicate columns:", duplicates)
 
-grid_search.fit(X_train, y_train)
+    # Define the top 10 most important features (from your provided data)
+    top_features = [
+        'URL_of_Anchor',  # Importance: 53.0
+        'SSLfinal_State',  # Importance: 46.0
+        'Prefix_Suffix',  # Importance: 41.0
+        'having_Sub_Domain',  # Importance: 27.0
+        'web_traffic',  # Importance: 27.0
+        'having_IP_Address',  # Importance: 26.0
+        'DNSRecord',  # Importance: 26.0
+        'Links_in_tags',  # Importance: 25.0
+        'Request_URL'  # Importance: 23.0
+    ]
 
-bst = grid_search.best_estimator_  
+    # Filter and rename features
+    df_filtered = filter_and_rename_features(df, top_features)
 
-with open('xgboost_model.pkl', 'wb') as model_file: 
-    pickle.dump(bst, model_file)
+    # Split data into features and labels
+    X = df_filtered.drop('Result', axis=1)
+    y = df_filtered['Result']
 
-with open('scaler.pkl', 'wb') as scaler_file:  
-    pickle.dump(scaler, scaler_file)
+    # Map target variable from [-1, 1] to [0, 1]
+    y = y.map({-1: 0, 1: 1})
 
-y_pred = bst.predict(X_test)  
-accuracy = accuracy_score(y_test, y_pred)
-precision = precision_score(y_test, y_pred, average='weighted')  
-recall = recall_score(y_test, y_pred, average='weighted')  
-conf_matrix = confusion_matrix(y_test, y_pred)
+    # Split into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-print("Performance Evaluation:")
-print(f"Accuracy: {accuracy:.4f}")
-print(f"Precision: {precision:.4f}")
-print(f"Recall: {recall:.4f}")
-print(f"F1 Score: {f1:.4f}")
-print("Confusion Matrix:")
-print(conf_matrix)
+    # Train the model
+    model = train_model(X_train, y_train, X.columns.tolist())
+
+    # Evaluate the model
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    print(f'Accuracy: {accuracy:.2f}')
+    print(classification_report(y_test, y_pred))
+
+    # Save the model
+    save_model(model, 'phishing_model.pkl')
+    print("Model saved as 'phishing_model.pkl'")
+
+if __name__ == '__main__':
+    main()
