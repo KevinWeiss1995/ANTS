@@ -4,6 +4,7 @@ import time
 import csv
 import pickle
 import os
+import subprocess
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
@@ -47,11 +48,25 @@ Dependencies:
 """
 
 
+def get_git_repo_root():
+    """Dynamically determine the Git repository root."""
+    try:
+        repo_root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], stderr=subprocess.STDOUT)
+        return repo_root.decode('utf-8').strip()
+    except subprocess.CalledProcessError:
+        print("Error: Not a git repository.")
+        return None
+
+# Get the repository root
+repo_root = get_git_repo_root()
+
+
 
 def train_ddos_model(df, y, algorithms_features, result_path=None):
     # If no result_path provided, use the default path
     if result_path is None:
-        result_path = "/Users/kweiss/git/ANTS/results/models"
+        # result_path = "/Users/kweiss/git/ANTS/results/models"
+        result_path = os.join(repo_root, "results", "models")
 
     # Initialize Random Forest with updated parameters
     rf_classifier = RandomForestClassifier(
@@ -172,7 +187,8 @@ def train_ddos_model(df, y, algorithms_features, result_path=None):
 # Add main section here
 if __name__ == "__main__":
     # Define absolute path to data
-    DATA_PATH = "/Users/kweiss/git/ANTS/data/DDoS/all_data.csv"
+    # DATA_PATH = "/Users/kweiss/git/ANTS/data/DDoS/all_data.csv"
+    DATA_PATH = os.join(repo_root, "data","DDoS","all_data.csv")
 
     # Define the features for Random Forest
     algorithms_features = {
