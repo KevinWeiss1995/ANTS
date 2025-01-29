@@ -1,6 +1,4 @@
-## Hello there
-#  ANTS 
-## Automated Network Threat Detection and Mitigation
+#  ANTS: Automated Network Threat Detection and Mitigation
 
 ## Overview  
 **Automated Network Threat Detection and Mitigation** is a comprehensive solution designed to identify, analyze, and respond to network threats. This system leverages advanced machine learning models to detect malicious activities such as intrusion attempts, phishing, malware, and botnet behavior. It is built to process data from various sources like packet captures (PCAP), log files, email content, and endpoint telemetry.
