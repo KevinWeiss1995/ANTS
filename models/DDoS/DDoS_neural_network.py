@@ -14,6 +14,7 @@ from sklearn.metrics import f1_score, precision_score, recall_score
 from sklearn.metrics import confusion_matrix, classification_report
 from imblearn.under_sampling import RandomUnderSampler
 from torch.utils.data import Dataset, DataLoader
+import warnings
 
 
 """
@@ -40,6 +41,9 @@ def get_git_repo_root():
 # Get the repository root
 repo_root = get_git_repo_root()
 
+# Suppress specific warnings
+warnings.filterwarnings("ignore", category=UserWarning, module='torch')
+warnings.filterwarnings("ignore", category=UserWarning, module='sklearn')
 
 class CustomDataset(Dataset):
     def __init__(self, X, y):
@@ -139,9 +143,19 @@ def train_ddos_model(df, y, algorithms_features, result_path=None):
             optimizer.step()
             
             total_loss += loss.item()
-            
-        if (epoch + 1) % 10 == 0:
-            print(f'Epoch [{epoch+1}/{epochs}], Loss: {total_loss/len(train_loader):.4f}')
+        
+        # Calculate validation loss
+        model.eval()
+        val_loss = 0
+        with torch.no_grad():
+            for batch_X, batch_y in test_loader:
+                batch_X, batch_y = batch_X.to(device), batch_y.to(device)
+                outputs = model(batch_X)
+                loss = criterion(outputs, batch_y)
+                val_loss += loss.item()
+
+        # Print training and validation loss
+        print(f'Epoch [{epoch+1}/{epochs}], Training Loss: {total_loss/len(train_loader):.4f}, Validation Loss: {val_loss/len(test_loader):.4f}')
 
     # Evaluation
     model.eval()
@@ -264,4 +278,43 @@ if __name__ == "__main__":
     # Train model
     print("\nStarting model training...")
     model, scaler = train_ddos_model(df, y, algorithms_features)
-    print("Training complete!") 
+    print("Training complete!")
+
+    # Load the state dict
+    model.load_state_dict(torch.load(model_filename, weights_only=True))  # Updated to suppress FutureWarning
+
+    # Load the model and scaler
+    model_filename = os.path.join(result_path, "DDoS_NeuralNetwork_v2.pt")
+    scaler_filename = os.path.join(result_path, "DDoS_NeuralNetwork_scaler_v2.pkl")
+
+    model.load_state_dict(torch.load(model_filename, weights_only=True))
+    with open(scaler_filename, "rb") as scaler_file:
+        scaler = pickle.load(scaler_file)
+
+    # Load metrics from CSV
+    results_file = os.path.join(result_path, "DDoS_results_v2.csv")
+    with open(results_file, "r", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        next(reader)  # Skip header
+        for row in reader:
+            if row[0] == "NeuralNetwork":
+                acc = float(row[1])
+                pr = float(row[2])
+                rc = float(row[3])
+                f_1 = float(row[4])
+                training_time = float(row[5])
+
+    # Print loaded metrics
+    print("\nLoaded Neural Network Model Performance:")
+    print(f'Accuracy: {acc:.2f}')
+    print(f'Precision: {pr:.2f}')
+    print(f'Recall: {rc:.2f}')
+    print(f'F1 Score: {f_1:.2f}')
+    print(f'Training Time: {training_time:.4f} seconds')
+
+    # Print confusion matrix
+    cm = confusion_matrix(y_test, predict)
+    print("\nConfusion Matrix:")
+    print(cm)
+    print("\nClassification Report:")
+    print(classification_report(y_test, predict)) 
