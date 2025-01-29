@@ -5,6 +5,9 @@ import os
 import numpy as np
 import torch
 from pathlib import Path
+import warnings
+
+warnings.filterwarnings("ignore", category=FutureWarning, message=".*torch.load.*")
 
 def list_models(base_path):
     """List all model files in the models directory and let user select one."""
