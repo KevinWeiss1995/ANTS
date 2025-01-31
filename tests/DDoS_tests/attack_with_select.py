@@ -1,11 +1,25 @@
+import sys
+import os
 import json
 import requests
 import pickle
-import os
 import numpy as np
 import torch
 from pathlib import Path
 import warnings
+
+# Get the absolute path to the project root
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(current_dir))
+sys.path.insert(0, project_root)
+
+try:
+    from models.DDoS.DDoS_attention import SelfAttentionWithGate
+    from models.DDoS.DDoS_dropout import DropoutRowwise, DropoutColumnwise
+except ImportError as e:
+    print(f"Error importing modules. Project root: {project_root}")
+    print(f"Python path: {sys.path}")
+    raise e
 
 warnings.filterwarnings("ignore", category=FutureWarning, message=".*torch.load.*")
 
@@ -59,21 +73,55 @@ def get_corresponding_scaler(model_path, base_path):
 
 # Define the neural network class for PyTorch models
 class DDoSNet(torch.nn.Module):
+    """Neural Network for DDoS detection with attention and custom dropout."""
     def __init__(self, input_size):
         super(DDoSNet, self).__init__()
+        
+        # Attention configuration
+        self.hidden_dim = 64
+        self.num_heads = 4
+        self.attention_dim = 32
+        self.inf = 1e9
+        
+        self.input_projection = torch.nn.Linear(input_size, self.hidden_dim)
+        self.self_attention = SelfAttentionWithGate(
+            c_qkv=self.hidden_dim,
+            c_hidden=self.attention_dim,
+            num_heads=self.num_heads,
+            inf=self.inf,
+            chunk_size=None
+        )
+        
         self.layers = torch.nn.Sequential(
-            torch.nn.Linear(input_size, 64),
+            torch.nn.Linear(self.hidden_dim, 64),
             torch.nn.ReLU(),
-            torch.nn.Dropout(0.3),
+            DropoutRowwise(p=0.3),
             torch.nn.Linear(64, 32),
             torch.nn.ReLU(),
-            torch.nn.Dropout(0.2),
+            DropoutColumnwise(p=0.2),
             torch.nn.Linear(32, 16),
             torch.nn.ReLU(),
             torch.nn.Linear(16, 2)
         )
         
     def forward(self, x):
+        x = self.input_projection(x)
+        x = x.unsqueeze(1)  # Add sequence dimension for attention
+        
+        # Create attention mask
+        batch_size = x.size(0)
+        attention_mask = torch.ones(
+            (batch_size, self.num_heads, 1, 1),
+            device=x.device
+        )
+        
+        x = self.self_attention(
+            input_qkv=x,
+            mask=attention_mask,
+            bias=None
+        )
+        
+        x = x.squeeze(1)  # Remove sequence dimension
         return self.layers(x)
 
 base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
