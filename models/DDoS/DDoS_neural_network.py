@@ -1,9 +1,12 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
 import numpy as np
 import pandas as pd
 import time
 import csv
 import pickle
-import os
 import subprocess
 import torch
 import torch.nn as nn
@@ -15,6 +18,8 @@ from sklearn.metrics import confusion_matrix, classification_report
 from imblearn.under_sampling import RandomUnderSampler
 from torch.utils.data import Dataset, DataLoader
 import warnings
+from DDoS_dropout import DropoutRowwise, DropoutColumnwise
+from models.DDoS.DDoS_attention import SelfAttentionWithGate, CrossAttentionNoGate
 
 
 """
@@ -58,21 +63,59 @@ class CustomDataset(Dataset):
 
 
 class DDoSNet(nn.Module):
+    """Neural Network for DDoS detection with attention and custom dropout.
+    
+    Args:
+        input_size: Number of input features.
+    """
     def __init__(self, input_size):
         super(DDoSNet, self).__init__()
+        
+        # Attention configuration
+        self.hidden_dim = 64
+        self.num_heads = 4
+        self.attention_dim = 32
+        self.inf = 1e9
+        
+        self.input_projection = nn.Linear(input_size, self.hidden_dim)
+        self.self_attention = SelfAttentionWithGate(
+            c_qkv=self.hidden_dim,
+            c_hidden=self.attention_dim,
+            num_heads=self.num_heads,
+            inf=self.inf,
+            chunk_size=None
+        )
+        
         self.layers = nn.Sequential(
-            nn.Linear(input_size, 64),
+            nn.Linear(self.hidden_dim, 64),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            DropoutRowwise(p=0.3),
             nn.Linear(64, 32),
             nn.ReLU(),
-            nn.Dropout(0.2),
+            DropoutColumnwise(p=0.2),
             nn.Linear(32, 16),
             nn.ReLU(),
             nn.Linear(16, 2)
         )
         
     def forward(self, x):
+        x = self.input_projection(x)
+        x = x.unsqueeze(1)
+        
+        # Create attention mask
+        batch_size = x.size(0)
+        attention_mask = torch.ones(
+            (batch_size, self.num_heads, 1, 1),
+            device=x.device
+        )
+        
+        x = self.self_attention(
+            input_qkv=x,
+            mask=attention_mask,
+            bias=None
+        )
+        
+        x = x.squeeze(1)
         return self.layers(x)
 
 
@@ -86,11 +129,9 @@ def train_ddos_model(df, y, algorithms_features, result_path=None):
 
     X = df[algorithms_features['NeuralNetwork']]
     
-    # Scale features
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
-    # Split with stratification
     X_train, X_test, y_train, y_test = train_test_split(
         X_scaled, y, test_size=0.20, random_state=42, stratify=y
     )
@@ -103,24 +144,20 @@ def train_ddos_model(df, y, algorithms_features, result_path=None):
     print(f"Attack samples (0): {n_samples_attack}")
     print(f"Benign samples (1): {n_samples_benign}")
 
-    # Sampling strategy
     sampling_strategy = {
         0: n_samples_attack,
         1: n_samples_attack
     }
 
-    # Use Random Under Sampling
     rus = RandomUnderSampler(sampling_strategy=sampling_strategy, random_state=42)
     X_train_resampled, y_train_resampled = rus.fit_resample(X_train, y_train)
 
-    # Create datasets and dataloaders
     train_dataset = CustomDataset(X_train_resampled, y_train_resampled)
     test_dataset = CustomDataset(X_test, y_test)
     
     train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
 
-    # Initialize model
     model = DDoSNet(input_size=len(algorithms_features['NeuralNetwork'])).to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -144,7 +181,6 @@ def train_ddos_model(df, y, algorithms_features, result_path=None):
             
             total_loss += loss.item()
         
-        # Calculate validation loss
         model.eval()
         val_loss = 0
         with torch.no_grad():
@@ -180,7 +216,7 @@ def train_ddos_model(df, y, algorithms_features, result_path=None):
     acc = (predict == y_test).mean()
     training_time = time.time() - second
 
-    # Print results
+    # Results 
     print('\nNeural Network Model Performance:')
     print(f'Accuracy: {acc:.2f}')
     print(f'Precision: {pr:.2f}')
@@ -188,17 +224,15 @@ def train_ddos_model(df, y, algorithms_features, result_path=None):
     print(f'F1 Score: {f_1:.2f}')
     print(f'Training Time: {training_time:.4f} seconds')
 
-    # Print confusion matrix
+    # Confusion matrix
     cm = confusion_matrix(y_test, predict)
     print("\nConfusion Matrix:")
     print(cm)
     print("\nClassification Report:")
     print(classification_report(y_test, predict))
 
-    # Create results directory if it doesn't exist
     os.makedirs(result_path, exist_ok=True)
 
-    # Save the model and scaler
     model_filename = os.path.join(result_path, "DDoS_NeuralNetwork_v2.pt")
     scaler_filename = os.path.join(result_path, "DDoS_NeuralNetwork_scaler_v2.pkl")
 
@@ -219,10 +253,8 @@ def train_ddos_model(df, y, algorithms_features, result_path=None):
 
 
 if __name__ == "__main__":
-    # Define absolute path to data
     DATA_PATH = os.path.join(repo_root, "data", "DDoS", "TRAINING_DATA.csv")
 
-    # Define the features
     algorithms_features = {
         'NeuralNetwork': [
             "Bwd Packet Length Std",
@@ -235,7 +267,6 @@ if __name__ == "__main__":
         ]
     }
 
-    # Load the dataset
     try:
         df = pd.read_csv(DATA_PATH, low_memory=False)
         print("Loaded dataset successfully")
@@ -248,7 +279,6 @@ if __name__ == "__main__":
         print(f"Error: Could not find {DATA_PATH}")
         exit(1)
 
-    # Convert labels
     y = (df.iloc[:, -1].isin(['0', '0.0'])).astype(int).values
     
     print("\nLabel conversion:")
@@ -256,7 +286,7 @@ if __name__ == "__main__":
     print("0 or 0.0 -> 1 (Benign)")
     print(f"\nClass distribution:\n{np.unique(y, return_counts=True)}")
 
-    # Sample analysis
+  
     print("\nAnalyzing sample data:")
     
     attack_indices = np.where(y == 0)[0][:5]
@@ -275,46 +305,41 @@ if __name__ == "__main__":
                                      df[algorithms_features['NeuralNetwork']].iloc[idx]):
             print(f"{feature_name}: {value}")
 
-    # Train model
+
     print("\nStarting model training...")
     model, scaler = train_ddos_model(df, y, algorithms_features)
     print("Training complete!")
 
-    # Load the state dict
-    model.load_state_dict(torch.load(model_filename, weights_only=True))  # Updated to suppress FutureWarning
-
-    # Load the model and scaler
+    result_path = os.path.join(repo_root, "results", "models")
     model_filename = os.path.join(result_path, "DDoS_NeuralNetwork_v2.pt")
     scaler_filename = os.path.join(result_path, "DDoS_NeuralNetwork_scaler_v2.pkl")
 
-    model.load_state_dict(torch.load(model_filename, weights_only=True))
-    with open(scaler_filename, "rb") as scaler_file:
-        scaler = pickle.load(scaler_file)
+    try:
+        results_file = os.path.join(result_path, "DDoS_results_v2.csv")
+        metrics = {}
+        with open(results_file, "r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            next(reader)  # Skip header
+            for row in reader:
+                if row[0] == "NeuralNetwork":
+                    metrics = {
+                        'accuracy': float(row[1]),
+                        'precision': float(row[2]),
+                        'recall': float(row[3]),
+                        'f1': float(row[4]),
+                        'time': float(row[5])
+                    }
+                    break
 
-    # Load metrics from CSV
-    results_file = os.path.join(result_path, "DDoS_results_v2.csv")
-    with open(results_file, "r", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        next(reader)  # Skip header
-        for row in reader:
-            if row[0] == "NeuralNetwork":
-                acc = float(row[1])
-                pr = float(row[2])
-                rc = float(row[3])
-                f_1 = float(row[4])
-                training_time = float(row[5])
+        if metrics:
+            print("\nLoaded Neural Network Model Performance:")
+            print(f'Accuracy: {metrics["accuracy"]:.2f}')
+            print(f'Precision: {metrics["precision"]:.2f}')
+            print(f'Recall: {metrics["recall"]:.2f}')
+            print(f'F1 Score: {metrics["f1"]:.2f}')
+            print(f'Training Time: {metrics["time"]:.4f} seconds')
+        else:
+            print("\nNo metrics found in results file.")
 
-    # Print loaded metrics
-    print("\nLoaded Neural Network Model Performance:")
-    print(f'Accuracy: {acc:.2f}')
-    print(f'Precision: {pr:.2f}')
-    print(f'Recall: {rc:.2f}')
-    print(f'F1 Score: {f_1:.2f}')
-    print(f'Training Time: {training_time:.4f} seconds')
-
-    # Print confusion matrix
-    cm = confusion_matrix(y_test, predict)
-    print("\nConfusion Matrix:")
-    print(cm)
-    print("\nClassification Report:")
-    print(classification_report(y_test, predict)) 
+    except (FileNotFoundError, IndexError, KeyError) as e:
+        print(f"\nError loading metrics: {str(e)}") 
