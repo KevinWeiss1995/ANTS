@@ -168,8 +168,14 @@ scaled_data_df = pd.DataFrame(all_data_scled, columns=data_sampled.columns)
 # Check unique values in the traffic type
 print("Unique values in 'traffic type':", bin_trff_type.unique())
 
+# -----------------------------------------------------------------
+
+# Extract the traffic type column from data_sampled (it should already have correct values) #c Hector Fix ^_^
+#bin_trff_type = data_sampled["traffic type"]
 # Encode the traffic type
-encoded_traffic_type = bin_trff_type.map({"BENIGN": 0, "Attack": 1})
+bin_trff_type = bin_trff_type.reset_index(drop=True) #a Hector Fix ^_^
+encoded_traffic_type = bin_trff_type.map({"Normal": 0, "Attack": 1}) #b Hector Fix see below ^_^
+#encoded_traffic_type = bin_trff_type.map({"BENIGN": 0, "Attack": 1})
 
 # Check for NaN values after mapping
 if encoded_traffic_type.isnull().any():
@@ -184,7 +190,7 @@ scaled_data_path = os.path.join(base_repo, 'data', 'network', 'scaled_data.csv')
 pd.DataFrame(scaled_data_df).to_csv(scaled_data_path)
 
 print("Scaled and processed data saved successfully.")
-'''
+
 ### Splitting dataset into training and test sets
 train_data, test_data, train_lbl, test_lbl = train_test_split(all_data_scled, att_type, random_state=10, train_size=0.7)
 
@@ -273,4 +279,3 @@ pd.DataFrame(test_bin_trff_lbll_enc).to_csv(test_bin_labels_path, index=False, h
 pd.DataFrame(up_train_bin_trff_lbl_enc).to_csv(up_train_bin_labels_path, index=False, header=False)
 
 print("Binary label files saved successfully!")
-'''
