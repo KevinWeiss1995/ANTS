@@ -94,50 +94,77 @@ class DDoSNet(nn.Module):
     def __init__(self, input_size):
         super(DDoSNet, self).__init__()
         
-        self.hidden_dim = 64
-        self.num_heads = 4
-        self.attention_dim = 32
-        self.inf = 1e9
-        
-        self.input_projection = nn.Linear(input_size, self.hidden_dim)
-        self.self_attention = SelfAttentionWithGate(
-            c_qkv=self.hidden_dim,
-            c_hidden=self.attention_dim,
-            num_heads=self.num_heads,
-            inf=self.inf,
-            chunk_size=None
+        # Feature extraction paths with stronger regularization
+        self.flow_path = nn.Sequential(
+            nn.Linear(3, 16),  # Reduced dimensions
+            nn.LeakyReLU(0.2),
+            nn.BatchNorm1d(16),
+            nn.Dropout(0.3)
         )
         
-        self.layers = nn.Sequential(
-            nn.Linear(self.hidden_dim, 64),
-            nn.ReLU(),
-            DropoutRowwise(p=0.3),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            DropoutColumnwise(p=0.2),
-            nn.Linear(32, 16),
-            nn.ReLU(),
-            nn.Linear(16, 2)
+        self.packet_path = nn.Sequential(
+            nn.Linear(2, 16),  # Reduced dimensions
+            nn.LeakyReLU(0.2),
+            nn.BatchNorm1d(16),
+            nn.Dropout(0.3)
+        )
+        
+        self.timing_path = nn.Sequential(
+            nn.Linear(2, 16),  # Reduced dimensions
+            nn.LeakyReLU(0.2),
+            nn.BatchNorm1d(16),
+            nn.Dropout(0.3)
+        )
+        
+        # Simpler combination layer
+        self.combine = nn.Sequential(
+            nn.Linear(48, 64),  # Reduced dimensions
+            nn.LeakyReLU(0.2),
+            nn.BatchNorm1d(64),
+            nn.Dropout(0.4)
+        )
+        
+        # Simplified feature extraction with strong regularization
+        self.features = nn.Sequential(
+            nn.Linear(64, 96),
+            nn.LeakyReLU(0.2),
+            nn.BatchNorm1d(96),
+            nn.Dropout(0.4),
+            
+            nn.Linear(96, 48),
+            nn.LeakyReLU(0.2),
+            nn.BatchNorm1d(48),
+            nn.Dropout(0.4)
+        )
+        
+        # Simple classification head
+        self.classifier = nn.Sequential(
+            nn.Linear(48, 2)
         )
         
     def forward(self, x):
-        x = self.input_projection(x)
-        x = x.unsqueeze(1)
+        # Apply L2 regularization to input
+        x = x * (1 - 0.01 * (x ** 2).sum(1, keepdim=True))
         
-        batch_size = x.size(0)
-        attention_mask = torch.ones(
-            (batch_size, self.num_heads, 1, 1),
-            device=x.device
-        )
+        # Split features into groups
+        flow_features = x[:, [1, 2, 6]]    # Flow Bytes/s, Total Length, Fwd IAT Total
+        packet_features = x[:, [0, 3]]     # Bwd/Fwd Packet Length Std
+        timing_features = x[:, [4, 5]]     # Flow IAT Std/Min
         
-        x = self.self_attention(
-            input_qkv=x,
-            mask=attention_mask,
-            bias=None
-        )
+        # Process each group
+        flow_out = self.flow_path(flow_features)
+        packet_out = self.packet_path(packet_features)
+        timing_out = self.timing_path(timing_features)
         
-        x = x.squeeze(1)
-        return self.layers(x)
+        # Combine with dropout
+        combined = torch.cat([flow_out, packet_out, timing_out], dim=1)
+        combined = self.combine(combined)
+        
+        # Extract features
+        features = self.features(combined)
+        
+        # Classification
+        return self.classifier(features)
 
 # Initialize Flask app
 app = Flask(__name__)

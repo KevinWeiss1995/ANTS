@@ -73,6 +73,7 @@ def capture_packets(interface, duration):
 
     start_time = time.time()
     for packet in capture.sniff_continuously():
+        
         if time.time() - start_time > duration:
             break
 
