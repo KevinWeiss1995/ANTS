@@ -58,11 +58,16 @@ def process_packet_data(packets):
                 packet['Fwd IAT Total']
             ])
 
+        print("##### PROCESSED DATA #######")
+        print("\n\n\n")
+        print(f"{processed_data}")
+        print("\n\n\n")
         # Convert to NumPy array
         return np.array(processed_data)
     except Exception as e:
         print(f"Error in process_packet_data: {e}")
         raise
+
 
 
 @app.route("/analyze_packets", methods=["POST"])

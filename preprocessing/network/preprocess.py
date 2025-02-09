@@ -46,12 +46,28 @@ pd.options.mode.use_inf_as_na = True
 
 data = pd.read_csv(data_path)
 
-print(f"Original DataFrame shape: {data.shape}")
+print("Original DataFrame:")
+print(data.head())
 
-all_zeroes_cols = data.columns[(data == 0).all()]
-data_dropped = data.drop(columns=all_zeroes_cols)
+# Remove identifying and metadata features that could cause data leakage
+columns_to_remove = [
+    "Flow ID", 
+    "Source IP", 
+    "Source Port",
+    "Destination IP", 
+    "Destination Port",
+    "Protocol", 
+    "Timestamp"
+]
 
-print(f"DataFrame shape after dropping columns with all zeros: {data_dropped.shape}")
+data = data.drop(columns=columns_to_remove, errors='ignore')
+
+# Drop columns with all zeros
+zero_cols = data.columns[(data == 0).all()]
+data_dropped = data.drop(columns=zero_cols)
+
+print("DataFrame after dropping columns with all zeros:")
+print(data_dropped.head())
 
 # Print the various labels in data
 print(data_dropped.loc[:,"Label"].unique())
@@ -71,7 +87,8 @@ data_dropped.drop(["traffic type"], axis=1, inplace=True)
 data_res, trf_type_res = rus.fit_resample(data_dropped, trf_type)
 data_sampled = data_res.join(trf_type_res, how="inner")
 
-print(f"Shape after downsampling: {data_sampled.shape}")
+print("DataFrame after downsampling:")
+print(data_sampled.head())
 
 
 # Prepare data for feature importance 
@@ -165,10 +182,73 @@ all_data_scled = qt.fit_transform(data_sampled)
 # Create a DataFrame from the scaled data
 scaled_data_df = pd.DataFrame(all_data_scled, columns=data_sampled.columns)
 
+# Add the categorical columns back
+scaled_data_df["Label"] = att_type.values
+scaled_data_df["traffic type"] = bin_trff_type.values
+
 # Check unique values in the traffic type
-print("Unique values in 'traffic type':", bin_trff_type.unique())
+print("Unique values in 'traffic type' before encoding:", scaled_data_df["traffic type"].unique())
+
+print("Scaled DataFrame with traffic type added back:")
+print(scaled_data_df.head())
+
+# Encode the traffic type
+scaled_data_df["traffic type"] = scaled_data_df["traffic type"].map({"Normal": 0, "Attack": 1})
+
+# Print the various labels in data
+print(scaled_data_df.loc[:,"traffic type"].unique())
+
+# Check for NaN values after mapping
+if scaled_data_df["traffic type"].isnull().any():
+    print("Warning: There are NaN values in the encoded traffic type.")
+
+print("Final DataFrame with encoded traffic type:")
+print(scaled_data_df.head())
+
+scaled_data_path = os.path.join(base_repo, 'data', 'network', 'scaled_data.csv')
+scaled_data_df.to_csv(scaled_data_path, index=False)
+
+print("Scaled and processed data saved successfully.")
+
+# Drop the "Label" column before train_test_split
+scaled_data_df.drop(["Label"], axis=1, inplace=True)
+
+# Split the data into training and testing sets
+train_data, test_data, train_lbl, test_lbl = train_test_split(scaled_data_df.drop("traffic type", axis=1), 
+                                                              scaled_data_df["traffic type"], 
+                                                              random_state=10, 
+                                                              train_size=0.7)
+
+# Print the heads of the resulting DataFrames
+print("Train Data:")
+print(train_data.head())
+
+print("Test Data:")
+print(test_data.head())
+
+print("Train Labels:")
+print(train_lbl.head())
+
+print("Test Labels:")
+print(test_lbl.head())
+
+# Save training and test data to CSV files
+train_data_path = os.path.join(base_repo, 'data', 'network', 'train_data.csv')
+test_data_path = os.path.join(base_repo, 'data', 'network', 'test_data.csv')
+train_labels_path = os.path.join(base_repo, 'data', 'network', 'train_labels.csv')
+test_labels_path = os.path.join(base_repo, 'data', 'network', 'test_labels.csv')
+
+# Save the files
+train_data.to_csv(train_data_path, index=False)
+test_data.to_csv(test_data_path, index=False)
+train_lbl.to_csv(train_labels_path, index=False, header=True)
+test_lbl.to_csv(test_labels_path, index=False, header=True)
+
+print("Training and test data files saved successfully!")
 
 # -----------------------------------------------------------------
+
+'''
 
 # Extract the traffic type column from data_sampled (it should already have correct values) #c Hector Fix ^_^
 #bin_trff_type = data_sampled["traffic type"]
@@ -279,3 +359,4 @@ pd.DataFrame(test_bin_trff_lbll_enc).to_csv(test_bin_labels_path, index=False, h
 pd.DataFrame(up_train_bin_trff_lbl_enc).to_csv(up_train_bin_labels_path, index=False, header=False)
 
 print("Binary label files saved successfully!")
+'''
