@@ -7,6 +7,7 @@ from sklearn.model_selection import KFold
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, Input
+from tensorflow.keras import backend as K
 
 
 
@@ -64,52 +65,47 @@ class CyclicLR(keras.callbacks.Callback):
         
         self.model.optimizer.lr = lr
 
+def focal_loss(gamma=2., alpha=.25):
+    def focal_loss_fixed(y_true, y_pred):
+        pt_1 = tf.where(tf.equal(y_true, 1), y_pred, tf.ones_like(y_pred))
+        pt_0 = tf.where(tf.equal(y_true, 0), y_pred, tf.zeros_like(y_pred))
+        return -K.mean(alpha * K.pow(1. - pt_1, gamma) * K.log(pt_1 + K.epsilon()) +
+                      (1 - alpha) * K.pow(pt_0, gamma) * K.log(1. - pt_0 + K.epsilon()))
+    return focal_loss_fixed
+
 def create_model(input_shape):
     inputs = Input(shape=(input_shape,), name='input')
     
     # Heavy initial dropout to lower starting accuracy
     x = layers.Dropout(0.7)(inputs)
     
-    # Feature extraction path focusing on packet lengths
-    x = layers.Dense(48, activation='relu',
-                    kernel_regularizer=keras.regularizers.l2(0.01),
-                    kernel_initializer='he_uniform')(x)
-    x = layers.Dropout(0.4)(x)
-    x = layers.BatchNormalization()(x)
+    # Main feature extraction path
+    x1 = layers.Dense(64, activation='relu',
+                     kernel_regularizer=keras.regularizers.l2(0.01))(x)
+    x1 = layers.Dropout(0.4)(x1)
+    x1 = layers.BatchNormalization()(x1)
     
-    # Intermediate processing with residual connection
-    skip = x
-    x = layers.Dense(24, activation='relu',
-                    kernel_regularizer=keras.regularizers.l2(0.01))(x)
+    # Secondary path for different feature combinations
+    x2 = layers.Dense(32, activation='relu',
+                     kernel_regularizer=keras.regularizers.l2(0.01))(x)
+    x2 = layers.Dropout(0.4)(x2)
+    x2 = layers.BatchNormalization()(x2)
+    
+    # Combine paths with attention
+    attention = layers.Dense(32, activation='tanh')(x2)
+    attention = layers.Dense(1, activation='softmax')(attention)
+    x2 = layers.Multiply()([x2, attention])
+    
+    # Merge paths
+    x = layers.Concatenate()([x1, x2])
+    
+    # Final processing
+    x = layers.Dense(32, activation='relu')(x)
     x = layers.Dropout(0.3)(x)
     x = layers.BatchNormalization()(x)
     
-    # Add attention layer to focus on important features
-    attention = layers.Dense(24, activation='tanh')(x)
-    attention = layers.Dense(1, activation='softmax')(attention)
-    x = layers.Multiply()([x, attention])
-    
-    x = layers.Dense(48, activation='relu')(x)
-    x = layers.Add()([x, skip])  # Residual connection
-    
-    # Final classification
-    x = layers.Dense(16, activation='relu',
-                    kernel_regularizer=keras.regularizers.l2(0.01))(x)
-    x = layers.Dropout(0.2)(x)
-    
     outputs = layers.Dense(1, activation='sigmoid', name='output')(x)
-    model = keras.Model(inputs=inputs, outputs=outputs)
-    
-    print("\nModel Architecture:")
-    model.summary()
-    
-    trainable_params = np.sum([np.prod(v.shape) for v in model.trainable_weights])
-    non_trainable_params = np.sum([np.prod(v.shape) for v in model.non_trainable_weights])
-    print(f"\nTotal trainable parameters: {trainable_params:,}")
-    print(f"Total non-trainable parameters: {non_trainable_params:,}")
-    print(f"Total parameters: {trainable_params + non_trainable_params:,}")
-    
-    return model
+    return keras.Model(inputs=inputs, outputs=outputs)
 
 # After loading data, before model creation
 print("\nPreprocessed Data Analysis:")
@@ -156,8 +152,10 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X, y)):
     
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=0.001),
-        loss='binary_crossentropy',
-        metrics=['accuracy', keras.metrics.AUC()]
+        loss=focal_loss(gamma=2.0, alpha=0.25),  # Focal loss
+        metrics=['accuracy', keras.metrics.AUC(),
+                 keras.metrics.Precision(), 
+                 keras.metrics.Recall()]
     )
     
     early_stopping = keras.callbacks.EarlyStopping(
@@ -207,8 +205,10 @@ print(f"Mean CV accuracy: {np.mean(fold_scores):.3f} (+/- {np.std(fold_scores) *
 final_model = create_model(X.shape[1])
 final_model.compile(
     optimizer=keras.optimizers.Adam(learning_rate=0.001),
-    loss='binary_crossentropy',
-    metrics=['accuracy', keras.metrics.AUC()]
+    loss=focal_loss(gamma=2.0, alpha=0.25),  # Focal loss
+    metrics=['accuracy', keras.metrics.AUC(),
+             keras.metrics.Precision(), 
+             keras.metrics.Recall()]
 )
 
 final_history = final_model.fit(
@@ -234,7 +234,7 @@ os.makedirs(model_dir, exist_ok=True)
 
 # Save the model in Keras format only (more stable)
 keras_path = os.path.join(model_dir, 'network_binary_classifier.keras')
-final_model.save(keras_path, save_format='keras_v3')
+final_model.save(keras_path)
 
 print(f"\nModel saved to: {keras_path}")
 
