@@ -8,6 +8,8 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, Input
 
+
+
 def get_git_repo_root():
     try:
         repo_root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], stderr=subprocess.STDOUT)
@@ -68,7 +70,7 @@ def create_model(input_shape):
     # Heavy initial dropout to lower starting accuracy
     x = layers.Dropout(0.7)(inputs)
     
-    # Feature extraction path
+    # Feature extraction path focusing on packet lengths
     x = layers.Dense(48, activation='relu',
                     kernel_regularizer=keras.regularizers.l2(0.01),
                     kernel_initializer='he_uniform')(x)
@@ -81,6 +83,12 @@ def create_model(input_shape):
                     kernel_regularizer=keras.regularizers.l2(0.01))(x)
     x = layers.Dropout(0.3)(x)
     x = layers.BatchNormalization()(x)
+    
+    # Add attention layer to focus on important features
+    attention = layers.Dense(24, activation='tanh')(x)
+    attention = layers.Dense(1, activation='softmax')(attention)
+    x = layers.Multiply()([x, attention])
+    
     x = layers.Dense(48, activation='relu')(x)
     x = layers.Add()([x, skip])  # Residual connection
     
