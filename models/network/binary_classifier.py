@@ -68,28 +68,60 @@ def create_model(input_shape):
     # Heavy initial dropout to lower starting accuracy
     x = layers.Dropout(0.7)(inputs)
     
-    # Parallel paths for different feature abstractions
-    # Path 1: Deep path for complex patterns
-    deep = layers.Dense(128, activation='relu',
-                    kernel_regularizer=keras.regularizers.l2(0.01))(x)
-    deep = layers.Dropout(0.5)(deep)
-    deep = layers.BatchNormalization()(deep)
-    deep = layers.Dense(64, activation='relu')(deep)
-    deep = layers.Dropout(0.4)(deep)
-    
-    # Path 2: Shallow path for direct patterns
-    shallow = layers.Dense(64, activation='relu',
-                       kernel_regularizer=keras.regularizers.l2(0.01))(x)
-    shallow = layers.Dropout(0.4)(shallow)
-    
-    # Combine paths
-    x = layers.Concatenate()([deep, shallow])
+    # Feature extraction path
+    x = layers.Dense(48, activation='relu',
+                    kernel_regularizer=keras.regularizers.l2(0.01),
+                    kernel_initializer='he_uniform')(x)
+    x = layers.Dropout(0.4)(x)
     x = layers.BatchNormalization()(x)
-    x = layers.Dense(32, activation='relu')(x)
+    
+    # Intermediate processing with residual connection
+    skip = x
+    x = layers.Dense(24, activation='relu',
+                    kernel_regularizer=keras.regularizers.l2(0.01))(x)
     x = layers.Dropout(0.3)(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Dense(48, activation='relu')(x)
+    x = layers.Add()([x, skip])  # Residual connection
+    
+    # Final classification
+    x = layers.Dense(16, activation='relu',
+                    kernel_regularizer=keras.regularizers.l2(0.01))(x)
+    x = layers.Dropout(0.2)(x)
     
     outputs = layers.Dense(1, activation='sigmoid', name='output')(x)
-    return keras.Model(inputs=inputs, outputs=outputs)
+    model = keras.Model(inputs=inputs, outputs=outputs)
+    
+    print("\nModel Architecture:")
+    model.summary()
+    
+    trainable_params = np.sum([np.prod(v.shape) for v in model.trainable_weights])
+    non_trainable_params = np.sum([np.prod(v.shape) for v in model.non_trainable_weights])
+    print(f"\nTotal trainable parameters: {trainable_params:,}")
+    print(f"Total non-trainable parameters: {non_trainable_params:,}")
+    print(f"Total parameters: {trainable_params + non_trainable_params:,}")
+    
+    return model
+
+# After loading data, before model creation
+print("\nPreprocessed Data Analysis:")
+print(f"Training set shape: {train_data.shape}")
+print("\nClass distribution in training set:")
+print(train_labels.value_counts(normalize=True))
+
+# Look at feature correlations with target
+correlations = []
+for column in train_data.columns:
+    corr = np.corrcoef(train_data[column], train_labels.values.ravel())[0,1]
+    correlations.append((column, abs(corr)))
+
+print("\nTop 10 features by correlation with target:")
+for feature, corr in sorted(correlations, key=lambda x: abs(x[1]), reverse=True)[:10]:
+    print(f"{feature}: {corr:.3f}")
+
+# Basic statistics of preprocessed features
+print("\nFeature statistics:")
+print(train_data.describe().round(3))
 
 # K-Fold Cross-validation
 print("\nPerforming 5-fold cross-validation...")
@@ -106,10 +138,10 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X, y)):
     # Calculate step size based on dataset size
     step_size = 8 * (len(X_train_fold) // 32)
     
-    # Initialize cyclical learning rate
+    # Initialize cyclical learning rate with wider range
     clr = CyclicLR(
-        base_lr=0.001,
-        max_lr=0.006,
+        base_lr=0.0005,
+        max_lr=0.01,  # Increased max learning rate
         step_size=step_size,
         mode='triangular2'
     )
@@ -192,31 +224,15 @@ print(classification_report(y_test, predictions))
 model_dir = os.path.join(base_repo, 'results', 'models', 'network')
 os.makedirs(model_dir, exist_ok=True)
 
-# Save the model in Keras format
+# Save the model in Keras format only (more stable)
 keras_path = os.path.join(model_dir, 'network_binary_classifier.keras')
-final_model.save(keras_path)
+final_model.save(keras_path, save_format='keras_v3')
 
-# Save as SavedModel format
-saved_model_path = os.path.join(model_dir, 'saved_model')
-tf.saved_model.save(final_model, saved_model_path)
+print(f"\nModel saved to: {keras_path}")
 
-# Convert to ONNX using command line
-onnx_path = os.path.join(model_dir, 'network_binary_classifier.onnx')
-conversion_command = f"python -m tf2onnx.convert --saved-model {saved_model_path} --output {onnx_path}"
-subprocess.run(conversion_command, shell=True, check=True)
+# Verify the saved model
+loaded_model = keras.models.load_model(keras_path)
+test_predictions = (loaded_model.predict(X_test) > 0.5).astype(int)
 
-# Clean up SavedModel directory
-import shutil
-shutil.rmtree(saved_model_path)
-
-# Verify ONNX model
-import onnxruntime
-session = onnxruntime.InferenceSession(onnx_path)
-input_name = session.get_inputs()[0].name
-onnx_predictions = session.run(None, {input_name: X_test.astype(np.float32)})[0]
-onnx_predictions = (onnx_predictions > 0.5).astype(int)
-
-print("\nONNX Model Verification:")
-print(classification_report(y_test, onnx_predictions))
-
-print(f"\nModels saved to: {model_dir}") 
+print("\nVerification of saved model:")
+print(classification_report(y_test, test_predictions)) 
