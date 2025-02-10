@@ -93,7 +93,7 @@ def create_model(input_shape):
     
     # Combine paths with attention
     attention = layers.Dense(32, activation='tanh')(x2)
-    attention = layers.Dense(1, activation='softmax')(attention)
+    attention = layers.Dense(32, activation='sigmoid')(attention)
     x2 = layers.Multiply()([x2, attention])
     
     # Merge paths
