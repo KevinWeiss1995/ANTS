@@ -1,0 +1,105 @@
+Network Traffic Data Pipeline Code Walkthrough
+
+1. IMPORTS AND SETUP
+-------------------
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import QuantileTransformer
+import pickle
+import os
+
+These imports provide:
+- Data handling (pandas, numpy)
+- Data transformation (QuantileTransformer)
+- Model serialization (pickle)
+- File operations (os)
+
+2. BASE DATA PIPELINE CLASS
+--------------------------
+class BaseDataPipeline:
+    def __init__(self, qt_path=None):
+
+Base class that:
+- Initializes common functionality
+- Loads a pre-fitted QuantileTransformer if provided
+- Handles transformer serialization
+
+Key methods:
+- save_transformer(): Saves fitted transformer for future use
+- Creates necessary directories
+- Serializes using pickle
+
+3. BINARY CLASSIFICATION PIPELINE
+-------------------------------
+class BinaryClassificationPipeline(BaseDataPipeline):
+    def preprocess_data(self, data):
+
+Main preprocessing pipeline that:
+1. Removes identifying/metadata features:
+   - Flow ID
+   - Source IP
+   - Source Port
+   - Destination IP
+   - Destination Port
+   - Protocol
+   - Timestamp
+
+2. Data Cleaning:
+   - Drops columns with all zeros
+   - Removes redundant information
+   - Handles missing values
+
+3. Label Processing:
+   - Converts text labels to binary
+   - "BENIGN" → 0
+   - "Attack" → 1
+
+4. Feature Scaling:
+   - Uses QuantileTransformer
+   - Scales features to uniform distribution
+   - Preserves target variable
+   - Handles outliers effectively
+
+OVERALL PURPOSE
+--------------
+The pipeline serves to:
+1. Clean and standardize network traffic data
+2. Remove non-predictive features
+3. Transform categorical labels to numeric
+4. Scale features appropriately
+5. Ensure consistent preprocessing across:
+   - Training
+   - Validation
+   - Testing
+   - Production
+
+KEY FEATURES
+-----------
+1. Modular Design:
+   - Base class for common functionality
+   - Specialized class for binary classification
+   - Easy to extend for other tasks
+
+2. Robust Preprocessing:
+   - Handles various data types
+   - Removes irrelevant features
+   - Scales features appropriately
+
+3. State Preservation:
+   - Saves transformer state
+   - Ensures consistent transformations
+   - Enables production deployment
+
+4. Data Quality:
+   - Removes zero-variance features
+   - Handles missing values
+   - Standardizes labels
+
+USAGE CONTEXT
+------------
+This pipeline is used to:
+1. Prepare raw network traffic data
+2. Create consistent feature sets
+3. Enable model training
+4. Support production deployment
+5. Ensure preprocessing reproducibility
