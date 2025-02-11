@@ -1,0 +1,143 @@
+Network Traffic Preprocessing Script Walkthrough
+
+1. IMPORTS AND SETUP
+-------------------
+import os
+import subprocess
+import warnings
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import QuantileTransformer
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+
+These imports provide:
+- Data handling (pandas, numpy)
+- Visualization (seaborn, matplotlib)
+- Feature scaling (QuantileTransformer)
+- Data splitting (train_test_split)
+- Feature importance (RandomForestClassifier)
+
+2. INITIAL DATA LOADING AND CLEANING
+----------------------------------
+# Load data from all_data.csv
+data = pd.read_csv(data_path)
+
+Remove non-predictive columns:
+- Flow ID
+- Source IP/Port
+- Destination IP/Port
+- Protocol
+- Timestamp
+
+Drop zero-variance columns:
+- Removes columns with all zeros
+- Eliminates non-informative features
+
+3. LABEL PROCESSING
+------------------
+# Convert labels to binary
+- "BENIGN" → "Normal"
+- All other traffic → "Attack"
+- Creates binary classification problem
+
+4. CLASS BALANCING
+-----------------
+# Use RandomUnderSampler
+- Balances class distribution
+- Reduces majority class
+- Prevents class bias
+- sampling_strategy=0.85
+
+5. FEATURE IMPORTANCE
+-------------------
+# Random Forest for feature selection
+- Identifies important features
+- Removes low-importance features
+- threshold = 0.001
+- Reduces dimensionality
+
+6. CORRELATION ANALYSIS
+----------------------
+# Remove highly correlated features
+Removes redundant features like:
+- Subflow statistics
+- Idle times
+- Flow durations
+- Packet lengths
+- Header lengths
+
+7. DATA SCALING
+--------------
+# QuantileTransformer scaling
+- Normalizes feature distributions
+- Handles outliers
+- Preserves relative ordering
+- Improves model training
+
+8. TRAIN-TEST SPLIT
+------------------
+# Split scaled data
+- 70% training
+- 30% testing
+- Random state for reproducibility
+- Stratified split
+
+9. DATA EXPORT
+-------------
+Saves processed files:
+- scaled_data.csv
+- train_data.csv
+- test_data.csv
+- train_labels.csv
+- test_labels.csv
+
+OVERALL PURPOSE
+--------------
+This script:
+1. Cleans raw network traffic data
+2. Converts to binary classification
+3. Balances classes
+4. Selects important features
+5. Scales features appropriately
+6. Creates train/test splits
+7. Saves processed datasets
+
+KEY PROCESSING STEPS
+-------------------
+1. Data Cleaning:
+   - Remove metadata
+   - Drop zero columns
+   - Handle missing values
+
+2. Feature Engineering:
+   - Binary labels
+   - Feature importance
+   - Correlation analysis
+
+3. Data Transformation:
+   - Class balancing
+   - Feature scaling
+   - Train/test splitting
+
+4. Quality Checks:
+   - Print data shapes
+   - Verify transformations
+   - Check class distributions
+
+USAGE CONTEXT
+------------
+This preprocessing script:
+1. Runs once on raw data
+2. Creates standardized datasets
+3. Enables model training
+4. Ensures reproducible results
+5. Documents data transformations
+
+The processed data feeds into:
+1. Model training
+2. Cross-validation
+3. Performance evaluation
+4. Production deployment
