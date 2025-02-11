@@ -9,6 +9,12 @@ from tensorflow import keras
 from tensorflow.keras import layers, Input, backend as K
 
 def get_git_repo_root():
+    """
+    Finds the root directory of the git repository.
+    
+    Returns:
+        String path to repository root or None if not in a git repo
+    """
     try:
         repo_root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], stderr=subprocess.STDOUT)
         return repo_root.decode('utf-8').strip()
@@ -63,6 +69,21 @@ class CyclicLR(keras.callbacks.Callback):
         self.model.optimizer.lr = lr
 
 def focal_loss(gamma=2., alpha=.25):
+    """
+    Creates a focal loss function for training deep neural networks with imbalanced datasets.
+    
+    Focal loss reduces the relative loss for well-classified examples and focuses more on
+    hard, misclassified examples. Useful when some examples are easy to classify while
+    others are hard.
+    
+    Args:
+        gamma: Focus parameter that reduces the loss for well-classified examples.
+              Higher values mean more focus on hard examples. Default is 2.
+        alpha: Weight parameter for class imbalance. Default is 0.25.
+    
+    Returns:
+        A loss function that can be used in model.compile()
+    """
     def focal_loss_fixed(y_true, y_pred):
         pt_1 = tf.where(tf.equal(y_true, 1), y_pred, tf.ones_like(y_pred))
         pt_0 = tf.where(tf.equal(y_true, 0), y_pred, tf.zeros_like(y_pred))
@@ -71,6 +92,20 @@ def focal_loss(gamma=2., alpha=.25):
     return focal_loss_fixed
 
 def create_model(input_shape):
+    
+    """
+    Creates a neural network for binary classification of network traffic.
+    
+    Uses a residual architecture with dropout and batch normalization for 
+    better feature learning and regularization.
+    
+    Args:
+        input_shape: Number of input features
+    
+    Returns:
+        A compiled Keras model
+    """
+
     inputs = Input(shape=(input_shape,), name='input')
     
     # Heavy initial dropout to lower starting accuracy
