@@ -38,7 +38,8 @@ class BinaryClassificationPipeline(BaseDataPipeline):
             "Destination IP", 
             "Destination Port",
             "Protocol", 
-            "Timestamp"
+            "Timestamp",
+            "External IP"
         ]
         processed_data = processed_data.drop(columns=columns_to_remove, errors='ignore')
         
@@ -46,9 +47,41 @@ class BinaryClassificationPipeline(BaseDataPipeline):
         zero_cols = processed_data.columns[(processed_data == 0).all()]
         processed_data = processed_data.drop(columns=zero_cols)
         
+        # Remove highly correlated features
+        features_to_remove = [
+            "Subflow Bwd Packets",
+            "Idle Mean",
+            "Flow Packets/s",
+            "Flow Duration",
+            "Total Backward Packets",
+            "min_seg_size_forward",
+            "Fwd Packet Length Std",
+            "Fwd IAT Std",
+            "Flow IAT Std",
+            "Flow IAT Max",
+            "Subflow Fwd Packets",
+            "Fwd IAT Max",
+            "Idle Min",
+            "Total Fwd Packets",
+            "Fwd Header Length",
+            "Max Packet Length",
+            "Total Length of Bwd Packets",
+            "Bwd Packet Length Std",
+            "Fwd Packet Length Mean",
+            "Bwd Packet Length Max",
+            "Total Length of Fwd Packets",
+            "Bwd Packet Length Mean",
+            "Packet Length Mean",
+            "Avg Bwd Segment Size",
+            "Average Packet Size"
+        ]
+        processed_data = processed_data.drop(columns=features_to_remove, errors='ignore')
+        
         # Convert Label to binary (if Label column exists)
         if "Label" in processed_data.columns:
-            processed_data["traffic type"] = processed_data["Label"].map({"BENIGN": 0, "Attack": 1})
+            processed_data["traffic type"] = processed_data["Label"].map(
+                lambda lbl: 1 if lbl != "BENIGN" else 0
+            )
             processed_data = processed_data.drop("Label", axis=1)
         
         # Scale the features (excluding the traffic type column)
