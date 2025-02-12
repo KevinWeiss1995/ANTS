@@ -3,7 +3,7 @@ import numpy as np
 import os
 import subprocess
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
-from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, Input, backend as K
@@ -42,8 +42,8 @@ y = train_labels.values.ravel()
 X_test = test_data.values
 y_test = test_labels.values.ravel()
 
-# Initialize K-Fold
-kfold = KFold(n_splits=5, shuffle=True, random_state=42)
+# Initialize Stratified K-Fold
+kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
 # Store fold results
 fold_scores = []
@@ -92,7 +92,6 @@ def focal_loss(gamma=2., alpha=.25):
     return focal_loss_fixed
 
 def create_model(input_shape):
-    
     """
     Creates a neural network for binary classification of network traffic.
     
@@ -105,29 +104,24 @@ def create_model(input_shape):
     Returns:
         A compiled Keras model
     """
-
     inputs = Input(shape=(input_shape,), name='input')
     
-    # Heavy initial dropout to lower starting accuracy
-    x = layers.Dropout(0.7)(inputs)
+    x = layers.Dropout(0.5)(inputs)
     
-    # Feature extraction path
-    x = layers.Dense(48, activation='relu',
-                    kernel_regularizer=keras.regularizers.l2(0.01),
+    x = layers.Dense(64, activation='relu',
+                    kernel_regularizer=keras.regularizers.l2(0.005),
                     kernel_initializer='he_uniform')(x)
     x = layers.Dropout(0.4)(x)
     x = layers.BatchNormalization()(x)
     
-    # Intermediate processing with residual connection
     skip = x
-    x = layers.Dense(24, activation='relu',
+    x = layers.Dense(32, activation='relu',
                     kernel_regularizer=keras.regularizers.l2(0.01))(x)
     x = layers.Dropout(0.3)(x)
     x = layers.BatchNormalization()(x)
-    x = layers.Dense(48, activation='relu')(x)
-    x = layers.Add()([x, skip])  # Residual connection
+    x = layers.Dense(64, activation='relu')(x)
+    x = layers.Add()([x, skip])
     
-    # Final classification
     x = layers.Dense(16, activation='relu',
                     kernel_regularizer=keras.regularizers.l2(0.01))(x)
     x = layers.Dropout(0.2)(x)
@@ -135,7 +129,7 @@ def create_model(input_shape):
     outputs = layers.Dense(1, activation='sigmoid', name='output')(x)
     return keras.Model(inputs=inputs, outputs=outputs)
 
-# K-Fold Cross-validation
+# 5-Fold Cross-validation
 print("\nPerforming 5-fold cross-validation...")
 for fold, (train_idx, val_idx) in enumerate(kfold.split(X, y)):
     print(f'\nFold {fold + 1}')
@@ -151,7 +145,7 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X, y)):
     
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=0.001),
-        loss=focal_loss(gamma=2.0, alpha=0.25),
+        loss=focal_loss(gamma=3.0, alpha=0.3),
         metrics=['accuracy', keras.metrics.AUC(),
                 keras.metrics.Precision(), 
                 keras.metrics.Recall()]
@@ -163,10 +157,10 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X, y)):
         restore_best_weights=True
     )
     
-    # Add warmup epochs with very high dropout
+    # Add warmup epochs with very high dropout, this causes lower starting accuracy but higher final accuracy
     warmup_model = create_model(X.shape[1])
     warmup_model.set_weights(model.get_weights())
-    warmup_model.layers[1].rate = 0.9  # Increase dropout for warmup
+    warmup_model.layers[1].rate = 0.9  # Adjust warmup dropout rate
     warmup_model.compile(
         optimizer=keras.optimizers.Adam(0.001),
         loss='binary_crossentropy',
@@ -181,14 +175,14 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X, y)):
         verbose=1
     )
     
-    # Transfer warmed-up weights
     model.set_weights(warmup_model.get_weights())
     
-    print("Main training phase...")
+    # Main training phase
+    print("\nMain training phase...")
     history = model.fit(
         X_train_fold, y_train_fold,
-        epochs=50,
-        batch_size=32,
+        epochs=100,  # Increased from 50
+        batch_size=64,  # Increased from 32
         validation_data=(X_val_fold, y_val_fold),
         callbacks=[early_stopping],
         verbose=1
@@ -210,14 +204,14 @@ final_model.compile(
 
 final_history = final_model.fit(
     X, y,
-    epochs=10,
-    batch_size=32,
+    epochs=100,  # Number of epochs, 100 is high, early stopping will stop training before this
+    batch_size=64, 
     validation_split=0.2,
     callbacks=[early_stopping],
     verbose=1
 )
 
-# Evaluate final model
+# Evaluate final model, print resutls
 predictions = (final_model.predict(X_test) > 0.5).astype(int)
 print("\nFinal Model Results:")
 print("\nConfusion Matrix:")
@@ -225,17 +219,15 @@ print(confusion_matrix(y_test, predictions))
 print("\nClassification Report:")
 print(classification_report(y_test, predictions))
 
-# Create model directory if it doesn't exist
 model_dir = os.path.join(base_repo, 'results', 'models', 'network')
 os.makedirs(model_dir, exist_ok=True)
 
-# Save the model in Keras format only (more stable)
+# Save the model in Keras format for future deployment
 keras_path = os.path.join(model_dir, 'network_binary_classifier.keras')
 final_model.save(keras_path, save_format='keras_v3')
 
 print(f"\nModel saved to: {keras_path}")
-
-# Verify the saved model
+#Verify the saved model
 loaded_model = keras.models.load_model(keras_path)
 test_predictions = (loaded_model.predict(X_test) > 0.5).astype(int)
 
