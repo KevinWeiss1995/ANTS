@@ -48,6 +48,20 @@ kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 # Store fold results
 fold_scores = []
 
+# Store feature names
+feature_names = train_data.columns.tolist()
+feature_file_path = os.path.join(base_repo, 'results', 'models', 'network', 'network_features.txt')
+os.makedirs(os.path.dirname(feature_file_path), exist_ok=True)
+
+print("\nSaving feature names to:", feature_file_path)
+with open(feature_file_path, 'w') as f:
+    for feature in feature_names:
+        f.write(f"{feature}\n")
+
+print("\nFeatures saved:")
+for feature in feature_names:
+    print(f"- {feature}")
+
 class CyclicLR(keras.callbacks.Callback):
     def __init__(self, base_lr=0.001, max_lr=0.006, step_size=2000., mode='triangular'):
         super(CyclicLR, self).__init__()
@@ -219,17 +233,16 @@ print(confusion_matrix(y_test, predictions))
 print("\nClassification Report:")
 print(classification_report(y_test, predictions))
 
-model_dir = os.path.join(base_repo, 'results', 'models', 'network')
-os.makedirs(model_dir, exist_ok=True)
+# Save model
+model_dir = os.path.join(base_repo, 'results', 'models', 'network', 'saved_model')
+tf.saved_model.save(final_model, model_dir)
 
-# Save the model in Keras format for future deployment
-keras_path = os.path.join(model_dir, 'network_binary_classifier.keras')
-final_model.save(keras_path, save_format='keras_v3')
+print(f"\nModel saved to: {model_dir}")
 
-print(f"\nModel saved to: {keras_path}")
-#Verify the saved model
-loaded_model = keras.models.load_model(keras_path)
-test_predictions = (loaded_model.predict(X_test) > 0.5).astype(int)
+# Verify saved model - Fix for loading SavedModel format
+loaded_model = tf.saved_model.load(model_dir)
+infer = loaded_model.signatures["serving_default"]
+test_predictions = (infer(tf.convert_to_tensor(X_test))['output'] > 0.5).numpy().astype(int)
 
 print("\nVerification of saved model:")
 print(classification_report(y_test, test_predictions)) 
