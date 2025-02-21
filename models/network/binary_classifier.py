@@ -24,29 +24,38 @@ def get_git_repo_root():
 base_repo = get_git_repo_root()
 data_dir = os.path.join(base_repo, 'data', 'network')
 
-# Load and shuffle data with fixed seed
 np.random.seed(42)
 train_data = pd.read_csv(os.path.join(data_dir, 'train_data.csv'))
 train_labels = pd.read_csv(os.path.join(data_dir, 'train_labels.csv'))
 test_data = pd.read_csv(os.path.join(data_dir, 'test_data.csv'))
 test_labels = pd.read_csv(os.path.join(data_dir, 'test_labels.csv'))
 
-# Shuffle training data
 shuffle_idx = np.random.permutation(len(train_data))
 train_data = train_data.iloc[shuffle_idx].reset_index(drop=True)
 train_labels = train_labels.iloc[shuffle_idx].reset_index(drop=True)
 
-# Convert to numpy arrays
 X = train_data.values
 y = train_labels.values.ravel()
 X_test = test_data.values
 y_test = test_labels.values.ravel()
 
-# Initialize Stratified K-Fold
 kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
-# Store fold results
 fold_scores = []
+
+# Store feature names
+feature_names = train_data.columns.tolist()
+feature_file_path = os.path.join(base_repo, 'results', 'models', 'network', 'network_features.txt')
+os.makedirs(os.path.dirname(feature_file_path), exist_ok=True)
+
+print("\nSaving feature names to:", feature_file_path)
+with open(feature_file_path, 'w') as f:
+    for feature in feature_names:
+        f.write(f"{feature}\n")
+
+print("\nFeatures saved:")
+for feature in feature_names:
+    print(f"- {feature}")
 
 class CyclicLR(keras.callbacks.Callback):
     def __init__(self, base_lr=0.001, max_lr=0.006, step_size=2000., mode='triangular'):
@@ -129,7 +138,6 @@ def create_model(input_shape):
     outputs = layers.Dense(1, activation='sigmoid', name='output')(x)
     return keras.Model(inputs=inputs, outputs=outputs)
 
-# 5-Fold Cross-validation
 print("\nPerforming 5-fold cross-validation...")
 for fold, (train_idx, val_idx) in enumerate(kfold.split(X, y)):
     print(f'\nFold {fold + 1}')
@@ -157,10 +165,9 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X, y)):
         restore_best_weights=True
     )
     
-    # Add warmup epochs with very high dropout, this causes lower starting accuracy but higher final accuracy
     warmup_model = create_model(X.shape[1])
     warmup_model.set_weights(model.get_weights())
-    warmup_model.layers[1].rate = 0.9  # Adjust warmup dropout rate
+    warmup_model.layers[1].rate = 0.9
     warmup_model.compile(
         optimizer=keras.optimizers.Adam(0.001),
         loss='binary_crossentropy',
@@ -177,12 +184,11 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X, y)):
     
     model.set_weights(warmup_model.get_weights())
     
-    # Main training phase
     print("\nMain training phase...")
     history = model.fit(
         X_train_fold, y_train_fold,
-        epochs=100,  # Increased from 50
-        batch_size=64,  # Increased from 32
+        epochs=100,
+        batch_size=64,  
         validation_data=(X_val_fold, y_val_fold),
         callbacks=[early_stopping],
         verbose=1
@@ -194,7 +200,7 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X, y)):
 print(f"\nCross-validation scores: {fold_scores}")
 print(f"Mean CV accuracy: {np.mean(fold_scores):.3f} (+/- {np.std(fold_scores) * 2:.3f})")
 
-# Train final model on all training data
+
 final_model = create_model(X.shape[1])
 final_model.compile(
     optimizer=keras.optimizers.Adam(learning_rate=0.001),
@@ -211,7 +217,6 @@ final_history = final_model.fit(
     verbose=1
 )
 
-# Evaluate final model, print resutls
 predictions = (final_model.predict(X_test) > 0.5).astype(int)
 print("\nFinal Model Results:")
 print("\nConfusion Matrix:")
@@ -219,17 +224,18 @@ print(confusion_matrix(y_test, predictions))
 print("\nClassification Report:")
 print(classification_report(y_test, predictions))
 
-model_dir = os.path.join(base_repo, 'results', 'models', 'network')
-os.makedirs(model_dir, exist_ok=True)
+# Save model
+model_dir = os.path.join(base_repo, 'results', 'models', 'network', 'saved_model')
+tf.saved_model.save(final_model, model_dir)
 
-# Save the model in Keras format for future deployment
-keras_path = os.path.join(model_dir, 'network_binary_classifier.keras')
-final_model.save(keras_path, save_format='keras_v3')
+print(f"\nModel saved to: {model_dir}")
 
-print(f"\nModel saved to: {keras_path}")
-#Verify the saved model
-loaded_model = keras.models.load_model(keras_path)
-test_predictions = (loaded_model.predict(X_test) > 0.5).astype(int)
+# Verify saved model - Fix for data type mismatch
+loaded_model = tf.saved_model.load(model_dir)
+infer = loaded_model.signatures["serving_default"]
+# Convert input to float32
+X_test_float32 = tf.cast(X_test, tf.float32)
+test_predictions = (infer(inputs=X_test_float32)['output_0'] > 0.5).numpy().astype(int)
 
 print("\nVerification of saved model:")
 print(classification_report(y_test, test_predictions)) 

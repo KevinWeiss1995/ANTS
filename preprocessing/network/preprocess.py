@@ -13,6 +13,7 @@ from sklearn.model_selection import train_test_split
 from imblearn.over_sampling import SMOTE
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import LabelEncoder
+import pickle
 
 """
 This script takes the all_data.csv file and from data/network and preprocesses it by
@@ -179,6 +180,16 @@ bin_trff_type = data_sampled.loc[:, "traffic type"]
 data_sampled.drop(["Label", "traffic type"], axis=1, inplace=True)  # Drop categorical columns
 all_data_scled = qt.fit_transform(data_sampled)
 
+# Save the QuantileTransformer
+transformer_dir = os.path.join(base_repo, 'results', 'transformers')
+os.makedirs(transformer_dir, exist_ok=True)
+transformer_path = os.path.join(transformer_dir, 'quantile_transformer.pkl')
+
+with open(transformer_path, 'wb') as f:
+    pickle.dump(qt, f)
+
+print(f"Saved QuantileTransformer to: {transformer_path}")
+
 # Create a DataFrame from the scaled data
 scaled_data_df = pd.DataFrame(all_data_scled, columns=data_sampled.columns)
 
@@ -247,116 +258,3 @@ test_lbl.to_csv(test_labels_path, index=False, header=True)
 print("Training and test data files saved successfully!")
 
 # -----------------------------------------------------------------
-
-'''
-
-# Extract the traffic type column from data_sampled (it should already have correct values) #c Hector Fix ^_^
-#bin_trff_type = data_sampled["traffic type"]
-# Encode the traffic type
-bin_trff_type = bin_trff_type.reset_index(drop=True) #a Hector Fix ^_^
-encoded_traffic_type = bin_trff_type.map({"Normal": 0, "Attack": 1}) #b Hector Fix see below ^_^
-#encoded_traffic_type = bin_trff_type.map({"BENIGN": 0, "Attack": 1})
-
-# Check for NaN values after mapping
-if encoded_traffic_type.isnull().any():
-    print("Warning: There are NaN values in the encoded traffic type.")
-
-# Add the encoded traffic type back to the scaled DataFrame
-scaled_data_df["traffic type"] = encoded_traffic_type
-
-print(scaled_data_df.head())  # Optional: Print the first few rows to verify
-
-scaled_data_path = os.path.join(base_repo, 'data', 'network', 'scaled_data.csv')
-pd.DataFrame(scaled_data_df).to_csv(scaled_data_path)
-
-print("Scaled and processed data saved successfully.")
-
-### Splitting dataset into training and test sets
-train_data, test_data, train_lbl, test_lbl = train_test_split(all_data_scled, att_type, random_state=10, train_size=0.7)
-
-## Additional held-out validation set for evaluating neural networks predicting on the upsampled training set 
-## The validation set needs to be split before upsampling
-neural_train_data, neural_validation, neural_train_lbl, neural_validation_lbl = train_test_split(
-    train_data, train_lbl, random_state=10, train_size=0.8
-)  ## Will be shuffled in the same order as train_data above
-
-train_bin_trff_lbl = train_lbl.map(lambda lbl: "Normal" if lbl == "BENIGN" else "Attack")
-neural_train_bin_trff_lbl = neural_train_lbl.map(lambda lbl: "Normal" if lbl == "BENIGN" else "Attack")  ## train_lbl for upsampled neural nets
-test_bin_trff_lbl = test_lbl.map(lambda lbl: "Normal" if lbl == "BENIGN" else "Attack")
-neural_validation_bin_trff_lbl = neural_validation_lbl.map(lambda lbl: "Normal" if lbl == "BENIGN" else "Attack")
-
-# Check the current distribution of each traffic type in training set
-a = train_lbl.value_counts()
-all_samples = a.sum()
-print(a)
-print("Total: {}".format(all_samples))
-
-
-min_thresh = 0.005  # it is a percent of the whole traffic after underSampling
-
-glob_cls_distr = None
-def over_sample_new(y):
-    global glob_cls_distr
-    cls_distr = {}
-    for trf_cls in np.unique(y):
-        curr_size = a.loc[trf_cls]  # global a == train_lbl.value_counts()
-        if (curr_size / all_samples) < min_thresh:
-            cls_distr[trf_cls] = ceil(min_thresh * all_samples)
-        else:
-            cls_distr[trf_cls] = curr_size
-    print("class distribution after over sampling:")
-    glob_cls_distr = cls_distr
-    print(glob_cls_distr)
-    return cls_distr
-
-def over_sample_bin(dct):
-    sm = 0
-    for key, val in dct.items():
-        if key != "BENIGN":
-            sm += val
-        else: benign = val
-    return {"Normal": benign, "Attack": sm}
-
-#dct = {'FTP-Patator': 7935, 'SSH-Patator': 6057, 'DoS slowloris': 6057, 'DoS Slowhttptest': 6057, 'DoS Hulk': 230124, 'DoS GoldenEye': 10293, 'Heartbleed': 6057, 'Brute Force': 6057, 'XSS': 6057, 'Sql Injection': 6057, 'Infiltration': 6057, 'DDoS': 128025, 'PortScan': 158804, 'Bot': 6057, 'BENIGN': 654771}
-smote = SMOTE(random_state=10, k_neighbors=3, sampling_strategy=over_sample_new)  # todo can resample w/ k_neigh only for heartbleed
-#print(glob_cls_distr)
-
-up_train_data, up_train_lbl = smote.fit_resample(train_data, train_lbl)
- 
-ratio = over_sample_bin(glob_cls_distr)
-#print(ratio)
-smote_bin = SMOTE(random_state=10, k_neighbors=3, sampling_strategy=ratio)
-up_train_bin_data, up_train_bin_trff_lbl = smote_bin.fit_resample(train_data, train_bin_trff_lbl)
-
-# Label encoding
-
-test_rshped = test_lbl.values.reshape(-1,1)
-train_rshped = train_lbl.values.reshape(-1,1)
-up_train_rshped = up_train_lbl.values.reshape(-1,1)
-
-ohenc = OneHotEncoder()
-lenc = LabelEncoder()
-
-test_lbl_enc = ohenc.fit_transform(test_rshped).toarray()  # one-hot encoded test set lbls
-train_lbl_enc = ohenc.fit_transform(train_rshped).toarray()  # one-hot encoded train set labels
-up_train_lbl_enc = ohenc.fit_transform(up_train_rshped).toarray()  # one-hot encoded upsampled train set lbls
-
-
-test_bin_trff_lbll_enc = lenc.fit_transform(test_bin_trff_lbl)  # label encoded test set binary lbls
-train_bin_trff_lbll_enc = lenc.fit_transform(train_bin_trff_lbl) # label encoded train set binary lbls
-up_train_bin_trff_lbl_enc = lenc.fit_transform(up_train_bin_trff_lbl)  # label encoded upsampled train set binary lbls
-
-
-# Save label-encoded binary labels as CSV files
-
-train_bin_trff_lbll_enc_path = os.path.join(base_repo, 'data', 'network', 'train_bin_trff_lbll_enc.csv')
-test_bin_labels_path = os.path.join(base_repo, 'data', 'network', 'test_bin_labels.csv')
-up_train_bin_labels_path = os.path.join(base_repo, 'data', 'network', 'up_train_bin_labels.csv')
-
-
-pd.DataFrame(train_bin_trff_lbll_enc).to_csv(train_bin_trff_lbll_enc_path, index=False, header=False)
-pd.DataFrame(test_bin_trff_lbll_enc).to_csv(test_bin_labels_path, index=False, header=False)
-pd.DataFrame(up_train_bin_trff_lbl_enc).to_csv(up_train_bin_labels_path, index=False, header=False)
-
-print("Binary label files saved successfully!")
-'''
