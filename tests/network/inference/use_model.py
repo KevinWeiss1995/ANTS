@@ -3,11 +3,12 @@ import numpy as np
 import os
 from tensorflow import keras
 
-# Get project root
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Get project root (adjusted for new location)
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Load the saved Keras model
 model_path = os.path.join(project_root, 'results', 'models', 'network', 'network_binary_classifier.keras')
+print(f"Looking for model at: {model_path}")  # Debug print
 model = keras.models.load_model(model_path)
 
 # Real network traffic data
