@@ -228,22 +228,14 @@ print(classification_report(y_test, predictions))
 model_dir = os.path.join(base_repo, 'results', 'models', 'network', 'saved_model')
 tf.saved_model.save(final_model, model_dir)
 
-<<<<<<< HEAD
 print(f"\nModel saved to: {model_dir}")
 
-# Verify saved model - Fix for loading SavedModel format
+# Verify saved model - Fix for data type mismatch
 loaded_model = tf.saved_model.load(model_dir)
 infer = loaded_model.signatures["serving_default"]
-test_predictions = (infer(tf.convert_to_tensor(X_test))['output'] > 0.5).numpy().astype(int)
-=======
-keras_path = os.path.join(model_dir, 'network_binary_classifier.keras')
-final_model.save(keras_path, save_format='keras_v3')
-
-print(f"\nModel saved to: {keras_path}")
-
-loaded_model = keras.models.load_model(keras_path)
-test_predictions = (loaded_model.predict(X_test) > 0.5).astype(int)
->>>>>>> b1d918d (Add and save network features)
+# Convert input to float32
+X_test_float32 = tf.cast(X_test, tf.float32)
+test_predictions = (infer(inputs=X_test_float32)['output_0'] > 0.5).numpy().astype(int)
 
 print("\nVerification of saved model:")
 print(classification_report(y_test, test_predictions)) 
