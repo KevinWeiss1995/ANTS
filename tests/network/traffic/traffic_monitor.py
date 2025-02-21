@@ -7,14 +7,17 @@ def packet_callback(packet):
     """Callback function to process each captured packet"""
     print(f"Captured packet: {packet.summary()}")
 
-def monitor_traffic(duration=60, output_dir="captured_traffic"):
+def monitor_traffic(duration=60):
     """
     Monitor and save network traffic
     
     Args:
         duration: How long to capture (in seconds)
-        output_dir: Directory to save pcap files
     """
+    # Set up the correct data directory path
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    output_dir = os.path.join(project_root, 'tests', 'network', 'data')
+    
     # Determine correct interface name based on OS
     if os.name == 'posix':  # macOS or Linux
         import platform
@@ -31,7 +34,7 @@ def monitor_traffic(duration=60, output_dir="captured_traffic"):
     
     # Generate filename with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{output_dir}/capture_{timestamp}.pcap"
+    filename = os.path.join(output_dir, f"capture_{timestamp}.pcap")
     
     print(f"📡 Starting traffic capture for {duration} seconds...")
     print(f"💾 Saving to: {filename}")
@@ -39,9 +42,9 @@ def monitor_traffic(duration=60, output_dir="captured_traffic"):
     
     # Capture packets
     packets = sniff(
-        iface=interface,  # Interface to monitor
-        prn=packet_callback,  # Callback function for each packet
-        timeout=duration  # How long to sniff
+        iface=interface,
+        prn=packet_callback,
+        timeout=duration
     )
     
     # Save captured packets
