@@ -43,7 +43,6 @@ kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
 fold_scores = []
 
-# Store feature names
 feature_names = train_data.columns.tolist()
 feature_file_path = os.path.join(base_repo, 'results', 'models', 'network', 'network_features.txt')
 os.makedirs(os.path.dirname(feature_file_path), exist_ok=True)
@@ -94,6 +93,9 @@ def focal_loss(gamma=2., alpha=.25):
         A loss function that can be used in model.compile()
     """
     def focal_loss_fixed(y_true, y_pred):
+
+        """Keras loss function accepts y_true and y_pred"""
+        
         pt_1 = tf.where(tf.equal(y_true, 1), y_pred, tf.ones_like(y_pred))
         pt_0 = tf.where(tf.equal(y_true, 0), y_pred, tf.zeros_like(y_pred))
         return -K.mean(alpha * K.pow(1. - pt_1, gamma) * K.log(pt_1 + K.epsilon()) +
@@ -102,10 +104,10 @@ def focal_loss(gamma=2., alpha=.25):
 
 def create_model(input_shape):
     """
-    Creates a neural network for binary classification of network traffic.
+    Creates a neural network for binary classification of netwrk traffic.
     
     Uses a residual architecture with dropout and batch normalization for 
-    better feature learning and regularization.
+    better feature learning and regularization. High input dropout to prevent overfitting :)
     
     Args:
         input_shape: Number of input features
@@ -230,10 +232,9 @@ tf.saved_model.save(final_model, model_dir)
 
 print(f"\nModel saved to: {model_dir}")
 
-# Verify saved model - Fix for data type mismatch
 loaded_model = tf.saved_model.load(model_dir)
 infer = loaded_model.signatures["serving_default"]
-# Convert input to float32
+
 X_test_float32 = tf.cast(X_test, tf.float32)
 test_predictions = (infer(inputs=X_test_float32)['output_0'] > 0.5).numpy().astype(int)
 
